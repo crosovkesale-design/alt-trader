@@ -461,9 +461,12 @@ def size_for(ex, sym, price, equity):
     if target < mn:
         return None, f"notional {target:.1f} < min {mn:.1f}"
     contracts = target / price
+    
     m = ex.market(sym)
-    step = float(ex['limits']['amount'].get('step') or ex['precision'].get('amount') or 0.001)
-    min_amt = float(m["limits"]["amount"]["min"] or step)
+    amount_limits = m.get("limits", {}).get("amount", {})
+    step = float(amount_limits.get("step") or m.get("precision", {}).get("amount") or 0.001)
+    min_amt = float(amount_limits.get("min") or step)
+    
     contracts = max(min_amt, round(contracts / step) * step)
     return contracts, "ok"
 

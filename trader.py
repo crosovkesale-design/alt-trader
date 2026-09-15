@@ -84,20 +84,20 @@ def save_state(s):
 # БИРЖА
 # ============================================================
 def make_exchange():
+    # в paper-режиме ключи не нужны, ставим заглушку чтобы ccxt не ругался
+    key = CFG["BINANCE_KEY"] or "paper"
+    sec = CFG["BINANCE_SECRET"] or "paper"
     ex = ccxt.binanceusdm({
-        "apiKey": CFG["BINANCE_KEY"],
-        "secret": CFG["BINANCE_SECRET"],
+        "apiKey": key,
+        "secret": sec,
         "enableRateLimit": True,
         "options": {"defaultType": "future"},
     })
-    if True:  # всегда demo, пока не готовы к live
-        # demo.binance.com — новый домен testnet, старый testnet.binancefuture.com редиректит
-        ex.urls["api"]["fapiPublic"]    = "https://demo.binance.com/fapi/v1"
-        ex.urls["api"]["fapiPrivate"]   = "https://demo.binance.com/fapi/v1"
-        ex.urls["api"]["fapiPublicV2"]  = "https://demo.binance.com/fapi/v2"
-        ex.urls["api"]["fapiPrivateV2"] = "https://demo.binance.com/fapi/v2"
-        ex.urls["api"]["fapiData"]      = "https://demo.binance.com/fapi/v1"
-    # markets подгрузятся сами через fapi
+    if CFG["LIVE"]:
+        ex.set_sandbox_mode(False)
+    else:
+        # paper: только публичные данные, никаких ордеров
+        ex.load_markets()
     return ex
     
 def fetch_ohlcv(ex, sym, limit=500):
@@ -107,13 +107,15 @@ def fetch_ohlcv(ex, sym, limit=500):
     return df.set_index("time").drop(columns=["ts"])
 
 def get_balance_usd(ex):
+    # в paper-режиме биржевой баланс недоступен — возвращаем виртуальный
+    if not CFG["LIVE"]:
+        return 100.0
     try:
         bal = ex.fetch_balance()
         return float(bal.get("USDT", {}).get("total", 0) or 0)
     except Exception as e:
         log.error(f"balance: {e}")
         return 0.0
-
 
 def min_notional(ex, sym):
     try:
@@ -746,43 +748,35 @@ def maybe_daily_report(ex, state):
 # РЕКОНСИЛЯЦИЯ
 # ============================================================
 def reconcile(ex, state):
+    # в paper-режиме сверять не с чем — выходим
+    if not CFG["LIVE"]:
+        log.info("paper mode: реконсиляция пропущена")
+        return
     log.info("реконсиляция с биржей")
     try:
         positions = ex.fetch_positions(CFG["SYMBOLS"])
     except Exception as e:
         log.error(f"reconcile fetch: {e}")
         return
-
     on_ex = {}
     for p in positions:
         contracts = float(p.get("contracts") or 0)
         if contracts > 0:
             on_ex[p["symbol"]] = p
-
     for sym in CFG["SYMBOLS"]:
         s = state["symbols"][sym]
         pos = on_ex.get(sym)
-
         if pos is None:
             if s["position"] != 0:
-                log.warning(f"{sym}: state={s['position']} но биржа пуста → сброс")
                 s["position"] = 0
                 s["entry_price"] = 0
                 s["size"] = 0
-                s["stop_price"] = 0
-                s["tp_price"] = 0
         else:
             side = 1 if pos["side"] == "long" else -1
-            entry = float(pos.get("entryPrice") or 0)
-            size = float(pos.get("contracts") or 0)
-            if s["position"] != side or abs(s["size"] - size) > size * 0.01:
-                log.warning(f"{sym}: реконсиляция {side}/{size}")
-                s["position"] = side
-                s["entry_price"] = entry
-                s["size"] = size
+            s["position"] = side
+            s["entry_price"] = float(pos.get("entryPrice") or 0)
+            s["size"] = float(pos.get("contracts") or 0)
     save_state(state)
-
-
 # ============================================================
 # ОБРАБОТЧИК КОМАНД
 # ============================================================
@@ -945,6 +939,8 @@ def run():
     log.info(f"interval={CFG['INTERVAL']} testnet={CFG['BINANCE_TESTNET']} live={CFG['LIVE']}")
 
     ex = make_exchange()
+    if not CFG["LIVE"]:
+        log.info("PAPER MODE: ордера не отправляются, только сигналы")
     state = load_state()
     _GLOBAL_STATE = state
 

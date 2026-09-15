@@ -90,7 +90,7 @@ def make_exchange():
         "enableRateLimit": True,
         "options": {"defaultType": "future"},
     })
-    if CFG["BINANCE_TESTNET"]:
+    if True:  # всегда demo, пока не готовы к live
         # demo.binance.com — новый домен testnet, старый testnet.binancefuture.com редиректит
         ex.urls["api"]["fapiPublic"]    = "https://demo.binance.com/fapi/v1"
         ex.urls["api"]["fapiPrivate"]   = "https://demo.binance.com/fapi/v1"

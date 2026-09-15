@@ -97,7 +97,7 @@ def make_exchange():
         ex.urls["api"]["fapiPublicV2"]  = "https://demo.binance.com/fapi/v2"
         ex.urls["api"]["fapiPrivateV2"] = "https://demo.binance.com/fapi/v2"
         ex.urls["api"]["fapiData"]      = "https://demo.binance.com/fapi/v1"
-    ex.load_markets()
+    # markets подгрузятся сами через fapi
     return ex
     
 def fetch_ohlcv(ex, sym, limit=500):

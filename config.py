@@ -6,7 +6,7 @@ CFG = {
     # Биржа
     "BINANCE_KEY": os.environ.get("BINANCE_KEY", ""),
     "BINANCE_SECRET": os.environ.get("BINANCE_SECRET", ""),
-    "BINANCE_TESTNET": os.environ.get("BINANCE_TESTNET", "true").lower() == "true",
+    "BINANCE_TESTNET": True,
     "LIVE": os.environ.get("LIVE", "false").lower() == "true",
 
     # Телеграм

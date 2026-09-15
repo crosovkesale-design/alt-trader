@@ -91,10 +91,15 @@ def make_exchange():
         "options": {"defaultType": "future"},
     })
     if CFG["BINANCE_TESTNET"]:
-        ex.set_sandbox_mode(True)
+        # demo.binance.com — новый домен testnet, старый testnet.binancefuture.com редиректит
+        ex.urls["api"]["fapiPublic"]    = "https://demo.binance.com/fapi/v1"
+        ex.urls["api"]["fapiPrivate"]   = "https://demo.binance.com/fapi/v1"
+        ex.urls["api"]["fapiPublicV2"]  = "https://demo.binance.com/fapi/v2"
+        ex.urls["api"]["fapiPrivateV2"] = "https://demo.binance.com/fapi/v2"
+        ex.urls["api"]["fapiData"]      = "https://demo.binance.com/fapi/v1"
     ex.load_markets()
     return ex
-
+    
 def fetch_ohlcv(ex, sym, limit=500):
     raw = ex.fetch_ohlcv(sym, timeframe=CFG["INTERVAL"], limit=limit)
     df = pd.DataFrame(raw, columns=["ts", "open", "high", "low", "close", "volume"])

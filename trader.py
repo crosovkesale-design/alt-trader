@@ -180,17 +180,16 @@ def run():
                     f"{state['daily_pnl']:+.4f} · сделок "
                     f"{state['daily_trades']}/{CFG['MAX_TRADES_PER_DAY']}")
                 last_hb = time.time()
-
             last_health_ping = time.time()
-# опрос команд каждые 10 сек, торговый цикл — раз в POLL_SECONDS
-slept = 0
-while slept < CFG["POLL_SECONDS"]:
-    time.sleep(10)
-    slept += 10
-    tg_off, cmds = tg_poll(tg_off)
-    for c in cmds:
-        handle_command(c)
-        save_state()
+            # опрос команд каждые 10 сек, торговый цикл — раз в POLL_SECONDS
+            slept = 0
+            while slept < CFG["POLL_SECONDS"]:
+                time.sleep(10)
+                slept += 10
+                tg_off, cmds = tg_poll(tg_off)
+                for c in cmds:
+                    handle_command(c)
+                    save_state()
 
         except KeyboardInterrupt:
             break

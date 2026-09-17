@@ -73,4 +73,8 @@ CFG = {
     "STATE_PATH": os.environ.get("STATE_PATH", "state.json"),
     "TRADES_CSV": os.environ.get("TRADES_CSV", "trades.csv"),
     "POLL_SECONDS": int(os.environ.get("POLL_SECONDS", "180")),
+
+    # ---------- новые ----------
+"MAX_SIGNALS_PER_CYCLE":  int(env("MAX_SIGNALS_PER_CYCLE", "20")),
+"HEALTH_CHECK_SEC":       int(env("HEALTH_CHECK_SEC", "1800")),  # 30 мин
 }

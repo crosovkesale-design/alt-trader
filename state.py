@@ -23,6 +23,7 @@ DEFAULT_STATE = {
     "symbols": {},
     "daily_pnl": 0.0,
     "daily_reset_ts": 0,
+    "last_reset_day": -1,
     "daily_trades": 0,
     "peak_equity": 0.0,
     "started_equity": 0.0,
@@ -123,13 +124,15 @@ def open_count():
 def check_daily_reset():
     s = _GLOBAL_STATE
     now = int(time.time())
-    if now - s["daily_reset_ts"] > 86400:
+    today = datetime.now(timezone.utc).toordinal()
+    last = s.get("last_reset_day", -1)
+    if today != last:
         s["daily_pnl"] = 0.0
         s["daily_trades"] = 0
         s["daily_reset_ts"] = now
+        s["last_reset_day"] = today
         return True
     return False
-
 
 def risk_ok(equity):
     s = _GLOBAL_STATE

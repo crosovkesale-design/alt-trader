@@ -75,6 +75,7 @@ CFG = {
     "POLL_SECONDS": int(os.environ.get("POLL_SECONDS", "180")),
 
     # ---------- новые ----------
-"MAX_SIGNALS_PER_CYCLE":  int(env("MAX_SIGNALS_PER_CYCLE", "20")),
-"HEALTH_CHECK_SEC":       int(env("HEALTH_CHECK_SEC", "1800")),  # 30 мин
+    "MAX_SIGNALS_PER_CYCLE":  int(os.environ.get("MAX_SIGNALS_PER_CYCLE", "20")),
+    "HEALTH_CHECK_SEC":       int(os.environ.get("HEALTH_CHECK_SEC", "1800")),
+ 
 }

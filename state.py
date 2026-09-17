@@ -2,6 +2,7 @@
 # состояние бота: equity, позиции, persistence
 import json
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from config import CFG
 

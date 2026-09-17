@@ -66,6 +66,7 @@ def run():
 
     tg_off = 0
     last_hb = 0
+    last_health_ping = time.time()
 
     while True:
         try:
@@ -94,63 +95,86 @@ def run():
                 log.info("новый UTC-день, сброс счётчиков")
             ok, why_risk = risk_ok(equity)
 
-            for sym in active_symbols():
-                s = state["symbols"].setdefault(sym, dict(DEFAULT_SYM_STATE))
+            # ============ ПРОХОД 1: обновление и сбор сигналов ============
+    signals = []   # кандидаты на открытие
 
-                try:
-                    df = fetch_ohlcv(sym, 500)
-                except Exception as e:
-                    log.warning(f"{sym} fetch: {e}")
-                    continue
+    for sym in active_symbols():
+    s = state["symbols"].setdefault(sym, dict(DEFAULT_SYM_STATE))
 
-                last_closed = df.iloc[:-1]
-                live = df.iloc[-1]
-                price = float(last_closed["close"].iloc[-1])
-                cts = int(last_closed.index[-1].timestamp())
+    try:
+        df = fetch_ohlcv(sym, 500)
+    except Exception as e:
+        log.warning(f"{sym} fetch: {e}")
+        continue
 
-                update_trailing(sym, float(live["high"]), float(live["low"]))
+    last_closed = df.iloc[:-1]
+    live = df.iloc[-1]
+    price = float(last_closed["close"].iloc[-1])
+    cts = int(last_closed.index[-1].timestamp())
 
-                sltp = check_sl_tp(sym, float(live["high"]), float(live["low"]))
-                if sltp:
-                    close_position(sym, sltp[0], sltp[1])
-                    save_state()
+    update_trailing(sym, float(live["high"]), float(live["low"]))
 
-                if cts == s["last_candle_ts"]:
-                    continue
+    sltp = check_sl_tp(sym, float(live["high"]), float(live["low"]))
+    if sltp:
+        close_position(sym, sltp[0], sltp[1])
+        save_state()
 
-                result = predict(sym, last_closed)
-                if result is None:
-                    continue
-                sig, proba = result
+    if cts == s["last_candle_ts"]:
+        continue
 
-                if s["position"] != 0 and sig != s["position"]:
-                    close_position(sym, f"signal {sig}", price)
+    result = predict(sym, last_closed)
+    if result is None:
+        continue
+    sig, proba = result
 
-                if s["position"] == 0 and sig != 0:
-                    if not ok:
-                        log.info(f"{sym}: {sig} пропущен — {why_risk}")
-                    elif open_count() >= positions_allowed(equity):
-                        log.info(f"{sym}: {sig} пропущен — лимит поз.")
-                    else:
-                        blocked, whyc = correlation_blocked(sym, sig)
-                        if blocked:
-                            log.info(f"{sym}: {sig} пропущен — {whyc}")
-                        else:
-                            open_position(sym, sig, price, equity, last_closed)
+    # закрытие при смене сигнала
+    if s["position"] != 0 and sig != s["position"]:
+        close_position(sym, f"signal {sig}", price)
 
-                s["last_candle_ts"] = cts
-                save_state()
+    # кандидат на открытие — сохраняем для сортировки
+    if s["position"] == 0 and sig != 0:
+        confidence = float(proba[int(proba.argmax())])
+        signals.append({
+            "sym": sym, "sig": sig, "confidence": confidence,
+            "price": price, "df": last_closed, "proba": proba,
+        })
 
-                log.info(
-                    f"{sym} {last_closed.index[-1]} px={price:.6f} "
-                    f"sig={sig} p=[{proba[0]:.2f},{proba[1]:.2f},"
-                    f"{proba[2]:.2f}] pos={s['position']} "
-                    f"eq=${get_balance_usd():.2f}")
+    s["last_candle_ts"] = cts
+    save_state()
+
+    log.info(
+        f"{sym} {last_closed.index[-1]} px={price:.6f} "
+        f"sig={sig} p=[{proba[0]:.2f},{proba[1]:.2f},"
+        f"{proba[2]:.2f}] pos={s['position']} "
+        f"eq=${get_balance_usd():.2f}")
+
+# ============ ПРОХОД 2: открытие по уверенности ============
+if signals and ok:
+    signals.sort(key=lambda x: x["confidence"], reverse=True)
+    slots = positions_allowed(equity) - open_count()
+    if slots > 0:
+        log.info(f"сигналов: {len(signals)}, слотов: {slots}")
+        for cand in signals[:slots]:
+            blocked, whyc = correlation_blocked(cand["sym"], cand["sig"])
+            if blocked:
+                log.info(f"{cand['sym']}: пропущен — {whyc}")
+                continue
+            open_position(cand["sym"], cand["sig"], cand["price"],
+                          equity, cand["df"])
+            save_state()
+elif signals and not ok:
+    log.info(f"сигналов {len(signals)}, но риск-стоп: {why_risk}")
 
             maybe_daily_report()
             save_state()
 
-            if time.time() - last_hb > CFG["HEARTBEAT_SECONDS"]:
+            # health: если цикл длится слишком долго — пинг
+if time.time() - last_health_ping > CFG["HEALTH_CHECK_SEC"]:
+    tg_send(f"⚠️ health: цикл не завершался "
+            f"{(time.time()-last_health_ping)/60:.0f} мин")
+    last_health_ping = time.time()
+
+if time.time() - last_hb > CFG["HEARTBEAT_SECONDS"]:
                 eq = get_balance_usd()
                 tg_send(
                     f"💓 ${eq:.2f} · поз {open_count()}/"
@@ -159,7 +183,8 @@ def run():
                     f"{state['daily_trades']}/{CFG['MAX_TRADES_PER_DAY']}")
                 last_hb = time.time()
 
-            time.sleep(CFG["POLL_SECONDS"])
+            last_health_ping = time.time()
+time.sleep(CFG["POLL_SECONDS"])
 
         except KeyboardInterrupt:
             break
